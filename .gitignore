@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+*.zip
+*.log
+check_permissions.py
+upload_to_heavencloud.py
+scratch/
