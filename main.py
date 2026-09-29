@@ -560,7 +560,16 @@ async def on_message(message: discord.Message):
                 print(f"[Sub Delete Error]: {e}", flush=True)
             return
 
-        # Delete the uploaded image immediately
+        att = image_attachments[0]
+        
+        # 1. Download image bytes in memory FIRST before deleting message
+        try:
+            image_bytes = await att.read()
+        except Exception as e:
+            print(f"[Attachment Read Error]: {e}", flush=True)
+            image_bytes = None
+
+        # 2. Delete the uploaded screenshot from chat
         try:
             await message.delete()
             print(f"[Sub Channel] Uploaded screenshot from {message.author.name} deleted successfully.", flush=True)
@@ -569,10 +578,16 @@ async def on_message(message: discord.Message):
         except Exception as e:
             print(f"[Sub Delete Error]: {e}", flush=True)
 
-        # Scan image attachment with Engine 2 (optimized for dark mode screenshots)
-        att = image_attachments[0]
-        print(f"[OCR] Scanning image from {message.author.name} with Engine 2: {att.url}")
-        success, extracted_text, err = await ocr_scanner.scan_image_url(att.url, engine="2")
+        if not image_bytes:
+            try:
+                await message.channel.send(f"❌ {message.author.mention}, could not read your image attachment.", delete_after=10)
+            except Exception:
+                pass
+            return
+
+        # 3. Scan image attachment with Engine 2 (optimized for dark mode screenshots)
+        print(f"[OCR] Scanning image bytes from {message.author.name} with Engine 2...", flush=True)
+        success, extracted_text, err = await ocr_scanner.scan_image_bytes(image_bytes, filename=att.filename or "scan.png", engine="2")
         
         # Prepare aliases list (including auto-extracted YouTube handle from URL)
         target_aliases = list(settings.get("sub_target_aliases", []))
@@ -590,22 +605,23 @@ async def on_message(message: discord.Message):
         msg = "Could not read text."
         
         if success and extracted_text:
-            print(f"[OCR Extracted Text (Engine 2)]:\n{extracted_text[:300]}")
+            print(f"[OCR Extracted Text (Engine 2)]:\n{extracted_text[:300]}", flush=True)
             is_subbed, msg = sub_verifier.check_subscription(extracted_text, target_aliases)
 
         # Fallback to Engine 1 if Engine 2 did not match
         if not is_subbed:
-            print("[OCR] Engine 2 did not match. Trying Engine 1 fallback...")
-            s1, text1, _ = await ocr_scanner.scan_image_url(att.url, engine="1")
+            print("[OCR] Engine 2 did not match. Trying Engine 1 fallback...", flush=True)
+            s1, text1, _ = await ocr_scanner.scan_image_bytes(image_bytes, filename=att.filename or "scan.png", engine="1")
             if s1 and text1:
-                print(f"[OCR Extracted Text (Engine 1)]:\n{text1[:300]}")
+                print(f"[OCR Extracted Text (Engine 1)]:\n{text1[:300]}", flush=True)
                 sub1, msg1 = sub_verifier.check_subscription(text1, target_aliases)
                 if sub1:
                     is_subbed = True
                     msg = msg1
                     extracted_text = text1
+                    success = True
 
-        print(f"[Verification Decision] Subscribed: {is_subbed} | Message: {msg}")
+        print(f"[Verification Decision] Subscribed: {is_subbed} | Message: {msg}", flush=True)
 
         if not success and not is_subbed:
             try:
@@ -626,9 +642,9 @@ async def on_message(message: discord.Message):
                 if role:
                     try:
                         await message.author.add_roles(role)
-                        print(f"[Role Added] Gave {role.name} to {message.author.name}")
+                        print(f"[Role Added] Gave {role.name} to {message.author.name}", flush=True)
                     except discord.Forbidden:
-                        print(f"[Error] Bot role is lower than {role.name} in Server Roles hierarchy or lacks 'Manage Roles' permission!")
+                        print(f"[Error] Bot role is lower than {role.name} in Server Roles hierarchy or lacks 'Manage Roles' permission!", flush=True)
             
             # Send temporary success message
             try:
@@ -667,7 +683,8 @@ async def on_message(message: discord.Message):
 
     for att in image_attachments:
         try:
-            success, extracted_text, err = await ocr_scanner.scan_image_url(att.url)
+            img_bytes = await att.read()
+            success, extracted_text, err = await ocr_scanner.scan_image_bytes(img_bytes, filename=att.filename or "scan.png")
             if not success or not extracted_text:
                 continue
 
