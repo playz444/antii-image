@@ -1,86 +1,115 @@
+import os
 import aiohttp
+import base64
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 logger = logging.getLogger("OCRScanner")
 
 OCR_SPACE_API_URL = "https://api.ocr.space/parse/image"
 
+DEFAULT_API_KEYS = [
+    "K81898748388957",
+    "K88574938288957",
+    "K85764491988957",
+    "K89278782388957",
+    "helloworld"
+]
+
 class OCRScanner:
-    def __init__(self, api_key: str = "helloworld"):
-        self.api_key = api_key
+    def __init__(self, api_key: Optional[str] = None):
+        custom_key = api_key or os.getenv("OCR_API_KEY")
+        if custom_key and custom_key not in DEFAULT_API_KEYS:
+            self.keys = [custom_key] + DEFAULT_API_KEYS
+        else:
+            self.keys = list(DEFAULT_API_KEYS)
+
+    async def scan_image_bytes(self, image_bytes: bytes, filename: str = "screenshot.png", engine: str = "2") -> Tuple[bool, str, Optional[str]]:
+        """
+        Scans raw image bytes using base64 payload and robust API key rotation.
+        """
+        if not image_bytes:
+            return False, "", "Empty image data."
+
+        b64_str = base64.b64encode(image_bytes).decode('utf-8')
+        base64_data = f"data:image/png;base64,{b64_str}"
+
+        for key in self.keys:
+            payload = {
+                "apikey": key,
+                "base64Image": base64_data,
+                "language": "eng",
+                "isOverlayRequired": "false",
+                "detectOrientation": "false",
+                "scale": "true" if engine == "2" else "false",
+                "OCREngine": engine
+            }
+
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(OCR_SPACE_API_URL, data=payload, timeout=aiohttp.ClientTimeout(total=20)) as response:
+                        if response.status in (429, 503):
+                            logger.warning(f"OCR key {key[:6]}... throttled ({response.status}). Trying next key...")
+                            continue
+
+                        if response.status != 200:
+                            err_text = await response.text()
+                            logger.warning(f"OCR key {key[:6]}... HTTP error {response.status}: {err_text}")
+                            continue
+
+                        data = await response.json()
+                        if data.get("IsErroredOnProcessing", False):
+                            err_msg = str(data.get("ErrorMessage", ["Unknown error"]))
+                            logger.warning(f"OCR Error with key {key[:6]}...: {err_msg}")
+                            continue
+
+                        parsed_results = data.get("ParsedResults", [])
+                        if not parsed_results:
+                            continue
+
+                        full_text = "\n".join([res.get("ParsedText", "") for res in parsed_results if res.get("ParsedText")])
+                        return True, full_text.strip(), None
+
+            except Exception as e:
+                logger.warning(f"Exception during OCR request with key {key[:6]}...: {e}")
+                continue
+
+        return False, "", "All OCR endpoints failed or were throttled."
 
     async def scan_image_url(self, image_url: str, engine: str = "2") -> Tuple[bool, str, Optional[str]]:
         """
-        Scans an image from a direct URL using OCR.space API.
-        Returns: (success: bool, extracted_text: str, error_message: Optional[str])
+        Fallback URL scanner.
         """
-        payload = {
-            "url": image_url,
-            "apikey": self.api_key,
-            "language": "eng",
-            "isOverlayRequired": "false",
-            "detectOrientation": "false",
-            "scale": "true" if engine == "2" else "false",
-            "OCREngine": engine
-        }
+        for key in self.keys:
+            payload = {
+                "url": image_url,
+                "apikey": key,
+                "language": "eng",
+                "isOverlayRequired": "false",
+                "detectOrientation": "false",
+                "scale": "true" if engine == "2" else "false",
+                "OCREngine": engine
+            }
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(OCR_SPACE_API_URL, data=payload, timeout=aiohttp.ClientTimeout(total=25)) as response:
-                    if response.status != 200:
-                        err_text = await response.text()
-                        logger.error(f"OCR API HTTP error {response.status}: {err_text}")
-                        return False, "", f"HTTP error {response.status}"
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(OCR_SPACE_API_URL, data=payload, timeout=aiohttp.ClientTimeout(total=20)) as response:
+                        if response.status in (429, 503):
+                            continue
+                        if response.status != 200:
+                            continue
 
-                    data = await response.json()
-                    
-                    if data.get("IsErroredOnProcessing", False):
-                        err_msg = data.get("ErrorMessage", ["Processing Error"])
-                        return False, "", str(err_msg)
+                        data = await response.json()
+                        if data.get("IsErroredOnProcessing", False):
+                            continue
 
-                    parsed_results = data.get("ParsedResults", [])
-                    if not parsed_results:
-                        return True, "", None
+                        parsed_results = data.get("ParsedResults", [])
+                        if not parsed_results:
+                            continue
 
-                    full_text = "\n".join([res.get("ParsedText", "") for res in parsed_results])
-                    return True, full_text.strip(), None
+                        full_text = "\n".join([res.get("ParsedText", "") for res in parsed_results if res.get("ParsedText")])
+                        return True, full_text.strip(), None
+            except Exception:
+                continue
 
-        except Exception as e:
-            logger.exception(f"Exception during OCR request: {e}")
-            return False, "", str(e)
-
-    async def scan_image_bytes(self, image_bytes: bytes, filename: str = "scan.png") -> Tuple[bool, str, Optional[str]]:
-        """
-        Scans raw image bytes using OCR.space multipart upload.
-        """
-        data = aiohttp.FormData()
-        data.add_field("apikey", self.api_key)
-        data.add_field("language", "eng")
-        data.add_field("isOverlayRequired", "false")
-        data.add_field("detectOrientation", "false") # Disabled for speed
-        data.add_field("scale", "false")             # Disabled for speed
-        data.add_field("OCREngine", "1")             # Engine 1 is significantly faster
-        data.add_field("file", image_bytes, filename=filename, content_type="image/png")
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(OCR_SPACE_API_URL, data=data, timeout=aiohttp.ClientTimeout(total=25)) as response:
-                    if response.status != 200:
-                        err_text = await response.text()
-                        return False, "", f"HTTP error {response.status}: {err_text}"
-
-                    result = await response.json()
-                    if result.get("IsErroredOnProcessing", False):
-                        err_msg = result.get("ErrorMessage", ["Processing Error"])
-                        return False, "", str(err_msg)
-
-                    parsed_results = result.get("ParsedResults", [])
-                    if not parsed_results:
-                        return True, "", None
-
-                    full_text = "\n".join([res.get("ParsedText", "") for res in parsed_results])
-                    return True, full_text.strip(), None
-        except Exception as e:
-            logger.exception(f"Exception during OCR bytes request: {e}")
-            return False, "", str(e)
+        return False, "", "All OCR endpoints failed."
