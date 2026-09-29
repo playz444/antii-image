@@ -1,0 +1,42 @@
+{
+    "1276764533331071048": {
+        "is_active": true,
+        "log_channel_id": 1514953794545258666,
+        "auto_delete": true,
+        "notify_channel": true,
+        "scams_detected_count": 2,
+        "sub_channel_id": 1523921857588498583,
+        "sub_role_id": 1361278905079828490,
+        "sub_log_channel_id": 1523924913310797884,
+        "sub_channel_url": "https://www.youtube.com/channel/UCzBSwQs5PFHY6o1uBgElLBA",
+        "sub_target_aliases": []
+    },
+    "1294252824322117632": {
+        "is_active": true,
+        "log_channel_id": null,
+        "auto_delete": true,
+        "notify_channel": true,
+        "scams_detected_count": 1,
+        "sub_channel_id": null,
+        "sub_role_id": null,
+        "sub_log_channel_id": null,
+        "sub_channel_url": null,
+        "sub_target_aliases": []
+    },
+    "1543444257421918353": {
+        "is_active": true,
+        "log_channel_id": null,
+        "auto_delete": true,
+        "notify_channel": true,
+        "scams_detected_count": 0,
+        "sub_channel_id": 1554338845066268672,
+        "sub_role_id": 1554335575602102282,
+        "sub_log_channel_id": null,
+        "sub_channel_url": "https://www.youtube.com/@abhicheats09",
+        "sub_target_aliases": [
+            "abhi cheats"
+        ],
+        "sub_panel_message_id": 1554345454777536564,
+        "sub_panel_channel_id": 1554338845066268672
+    }
+}
