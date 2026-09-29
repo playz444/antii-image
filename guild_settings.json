@@ -8,8 +8,13 @@
         "sub_channel_id": 1523921857588498583,
         "sub_role_id": 1361278905079828490,
         "sub_log_channel_id": 1523924913310797884,
-        "sub_channel_url": "https://www.youtube.com/channel/UCzBSwQs5PFHY6o1uBgElLBA",
-        "sub_target_aliases": []
+        "sub_channel_url": "https://youtube.com/@NexusLive69",
+        "sub_target_aliases": [
+            "nexus live",
+            "nexus playz",
+            "@NexusLive69",
+            "NexusLive69"
+        ]
     },
     "1294252824322117632": {
         "is_active": true,
