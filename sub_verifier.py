@@ -6,8 +6,11 @@ def check_subscription(ocr_text: str, target_aliases: List[str]) -> Tuple[bool, 
     Checks the OCR text for subscriber verification with smart normalization.
     Returns (success: bool, message: str)
     """
-    if not ocr_text or not target_aliases:
-        return False, "Configuration error or no text found in image."
+    if not target_aliases:
+        return False, "⚠️ Server Error: The server admin has not configured any target YouTube Channel Aliases in `/sub-setup`."
+        
+    if not ocr_text:
+        return False, "Could not detect any text in your screenshot. Please upload a clear, uncropped image."
     
     text_lower = ocr_text.lower()
     text_clean = re.sub(r'[^a-zA-Z0-9\s]', ' ', text_lower)
